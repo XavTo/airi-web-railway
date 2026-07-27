@@ -1,0 +1,36 @@
+# syntax=docker/dockerfile:1
+
+FROM node:24-alpine
+
+ARG AIRI_REF=v0.11.3
+
+RUN apk add --no-cache git ca-certificates
+
+WORKDIR /app
+
+RUN git clone \
+    --filter=blob:none \
+    --depth 1 \
+    --branch "${AIRI_REF}" \
+    https://github.com/moeru-ai/airi.git .
+
+RUN corepack enable
+
+RUN pnpm install --frozen-lockfile --ignore-scripts
+
+RUN rm -rf packages/server-schema/dist \
+    && pnpm -F @proj-airi/server-schema run build \
+    && if grep -qE "from ['\"]virtual:" packages/server-schema/dist/index.mjs; then \
+         echo "server-schema build failed" >&2; \
+         exit 1; \
+       fi
+
+RUN pnpm -F @proj-airi/server-sdk-shared run build
+RUN pnpm -F @proj-airi/server run build
+
+ENV HOST=0.0.0.0
+ENV PORT=3000
+
+EXPOSE 3000
+
+CMD ["pnpm", "-F", "@proj-airi/server", "start"]
