@@ -2,15 +2,15 @@ name: Publish AIRI Web image
 
 on:
   workflow_dispatch:
-    inputs:
-      airi_version:
-        description: "AIRI Docker tag, for example 0.10.2 or 0.11.3"
-        required: true
-        default: "0.10.2"
 
 permissions:
   contents: read
   packages: write
+
+env:
+  IMAGE_NAME: ghcr.io/xavto/airi-web-railway
+  AIRI_REF: v0.11.3
+  IMAGE_TAG: 0.11.3
 
 jobs:
   publish:
@@ -19,16 +19,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-
-      - name: Resolve lowercase image name
-        id: image
-        shell: bash
-        run: |
-          OWNER="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
-          echo "name=ghcr.io/${OWNER}/airi-web-railway" >> "$GITHUB_OUTPUT"
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -40,20 +30,22 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and publish wrapper image
+      - name: Build and publish AIRI Web
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           build-args: |
-            AIRI_VERSION=${{ inputs.airi_version }}
+            AIRI_REF=${{ env.AIRI_REF }}
+            VITE_ENABLE_POSTHOG=false
           tags: |
-            ${{ steps.image.outputs.name }}:${{ inputs.airi_version }}
-            ${{ steps.image.outputs.name }}:latest
+            ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+            ${{ env.IMAGE_NAME }}:latest
           labels: |
             org.opencontainers.image.title=AIRI Web for Railway
             org.opencontainers.image.description=Railway-ready browser edition of Project AIRI
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: false
