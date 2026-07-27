@@ -28,8 +28,7 @@ RUN git clone \
 
 RUN corepack enable
 
-RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
-    pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile
 
 RUN pnpm -F @proj-airi/stage-web run build
 
