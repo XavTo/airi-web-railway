@@ -49,3 +49,32 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: false
+  
+  publish-server:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.server
+          push: true
+          platforms: linux/amd64
+          build-args: |
+            AIRI_REF=v0.11.3
+          tags: |
+            ghcr.io/xavto/airi-server-railway:0.11.3
+            ghcr.io/xavto/airi-server-railway:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
