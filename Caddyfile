@@ -1,0 +1,39 @@
+{
+	admin off
+	persist_config off
+	auto_https off
+
+	log {
+		format json
+	}
+}
+
+:{$PORT:8080} {
+	root * /srv
+	encode zstd gzip
+
+	# Endpoint utilisé par Railway pour vérifier le déploiement.
+	handle /healthz {
+		header Content-Type "text/plain; charset=utf-8"
+		respond "ok" 200
+	}
+
+	# Aucun backend /api n'est fourni par ce template statique.
+	handle /api/* {
+		respond "API backend not configured" 404
+	}
+
+	# Les fichiers générés dans /assets possèdent généralement un hash.
+	@immutable path /assets/*
+	header @immutable Cache-Control "public, max-age=31536000, immutable"
+
+	# Les éléments PWA doivent être revalidés régulièrement.
+	@pwaFiles path /index.html /sw.js /registerSW.js /manifest.webmanifest
+	header @pwaFiles Cache-Control "no-cache"
+
+	# Support du routeur Vue : une actualisation sur /settings ou une autre
+	# route doit renvoyer index.html au lieu d'une erreur 404.
+	try_files {path} /index.html
+
+	file_server
+}
