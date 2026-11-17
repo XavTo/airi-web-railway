@@ -16,7 +16,7 @@ const ref = name => '${{' + name + '}}'
 const cfg = (value, description = undefined) => ({ defaultValue: value, isOptional: false, ...(description ? { description } : {}) })
 const model = 'qwen2.5:1.5b'
 const stt = 'Systran/faster-whisper-base'
-const tts = 'hexgrad/Kokoro-82M'
+const tts = 'speaches-ai/Kokoro-82M-v1.0-ONNX'
 const shellQuote = value => "'" + value.replaceAll("'", "'\\''") + "'"
 const ollamaScript = await readFile(new URL('../deploy/ollama.sh', import.meta.url), 'utf8')
 const startOllama = '/bin/bash -c ' + shellQuote(ollamaScript)

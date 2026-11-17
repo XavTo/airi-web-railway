@@ -90,7 +90,7 @@ async function main() {
 
   const cfg = {
     chat: base.OLLAMA_MODEL || 'qwen2.5:1.5b',
-    speech: base.TTS_MODEL || 'hexgrad/Kokoro-82M',
+    speech: base.TTS_MODEL || 'speaches-ai/Kokoro-82M-v1.0-ONNX',
     transcription: base.STT_MODEL || 'Systran/faster-whisper-base',
     voice: base.TTS_VOICE || 'ff_siwis',
   }

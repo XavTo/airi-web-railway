@@ -10,6 +10,14 @@ function patch(file, before, after) {
   writeFileSync(path, source.replace(before, () => after))
 }
 
+function removeBlock(file, pattern) {
+  const source = readFileSync(resolve(root, file), 'utf8')
+  const matches = [...source.matchAll(pattern)]
+  if (matches.length !== 1)
+    throw new Error(`Expected one upstream block in ${file}: ${pattern}`)
+  patch(file, matches[0][0], '')
+}
+
 // The OIDC client, sync and all web API requests share the deploy's public origin.
 patch('packages/stage-ui/src/libs/server.ts',
   "import.meta.env.VITE_SERVER_URL || 'https://api.airi.build'",
@@ -49,8 +57,11 @@ patch(auth, '      before: createAuthMiddleware(async (ctx) => {', `      before
         if (ctx.path === '/sign-up/email' && (!bootstrap || ctx.headers?.get('x-airi-bootstrap') !== bootstrap))
           throw new APIError('FORBIDDEN', { message: 'Registration is disabled' })`)
 patch(auth, '  const uris = new Set(DEFAULT_WEB_REDIRECT_URIS)', '  const uris = new Set<string>()')
+removeBlock(auth, /^const DEFAULT_WEB_REDIRECT_URIS = \[\n[\s\S]*?^\]\n\n/gm)
 
 for (const file of ['server/apps/auth/src/origin.ts', 'server/apps/api/src/utils/origin.ts']) {
+  patch(file, "import { matchesTrustedOriginRule } from '@proj-airi/auth-shared'\n\n", '')
+  removeBlock(file, /^const TRUSTED_EXACT_ORIGINS = \[\n[\s\S]*?^\]\n\n/gm)
   patch(file, `  if (TRUSTED_EXACT_ORIGINS.includes(origin))
     return origin
   if (additionalTrustedOrigins.includes(origin))
@@ -73,5 +84,7 @@ patch('server/apps/auth/src/origin.ts', `  for (const origin of TRUSTED_AUTH_CAL
   }`, `  for (const origin of env.ADDITIONAL_TRUSTED_ORIGINS) {
     origins.add(origin)
   }`)
+removeBlock('server/apps/auth/src/origin.ts', /^\/\/ NOTICE:\n\/\/ Better Auth accepts non-http\(s\) origins[\s\S]*?^\}\)\n\n/gm)
+removeBlock('server/apps/auth/src/origin.ts', /^\/\/ NOTICE:\n\/\/ Better Auth's callbackURL validation[\s\S]*?^\]\n\n/gm)
 
 patch('apps/stage-web/vite.config.ts', '              /^\\/api\\//,', '              /^\\/api\\//,\n              /^\\/auth\\/(?!callback(?:\\/|$))/,')
