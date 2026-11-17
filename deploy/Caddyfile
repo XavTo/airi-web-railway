@@ -1,0 +1,91 @@
+{
+	auto_https off
+	admin off
+}
+
+:{$PORT:8080} {
+	header X-Content-Type-Options nosniff
+	header Referrer-Policy same-origin
+
+	route {
+		respond /healthz "ok" 200
+
+		@private path /internal /internal/* /api/internal /api/internal/* /api/auth/sign-up/* /api/auth/sign-in/social /api/auth/link-social /api/auth/sign-in/steam /api/auth/link/steam
+		respond @private 404
+
+		# S3 authorizes these requests itself (SigV4). Preserve the host and path.
+		@objects path /airi-private /airi-private/*
+		reverse_proxy @objects {$S3_UPSTREAM} {
+			header_up Host {http.request.hostport}
+			header_up -Cookie
+		}
+
+		@inference path /local/*
+		handle @inference {
+			request_body {
+				max_size 24MB
+			}
+			forward_auth {$GUARD_UPSTREAM:127.0.0.1:3002} {
+				uri /authorized
+			}
+
+			@ollama {
+				expression `{http.request.uri.path} == "/local/chat/v1/models" && {http.request.method} == "GET" || {http.request.uri.path} == "/local/chat/v1/chat/completions" && {http.request.method} == "POST"`
+			}
+			handle @ollama {
+				uri strip_prefix /local/chat
+				reverse_proxy {$OLLAMA_UPSTREAM} {
+					flush_interval -1
+					header_up -Authorization
+					header_up -Cookie
+				}
+			}
+
+			@voice {
+				expression `{http.request.uri.path} == "/local/voice/v1/models" && {http.request.method} == "GET" || {http.request.uri.path} in ["/local/voice/v1/audio/transcriptions", "/local/voice/v1/audio/speech"] && {http.request.method} == "POST"`
+			}
+			handle @voice {
+				uri strip_prefix /local/voice
+				reverse_proxy {$VOICE_UPSTREAM} {
+					flush_interval -1
+					header_up -Authorization
+					header_up -Cookie
+				}
+			}
+
+			respond 404
+		}
+
+		@auth path /api/auth /api/auth/* /auth /auth/* /.well-known/oauth-authorization-server/api/auth /.well-known/openid-configuration/api/auth
+		@callback path /auth/callback
+		handle @callback {
+			root * {$STAGE_ROOT:/srv/stage}
+			rewrite * /index.html
+			header Cache-Control "no-store"
+			file_server
+		}
+		reverse_proxy @auth {$AUTH_UPSTREAM:127.0.0.1:3001} {
+			header_up -X-Airi-Bootstrap
+			header_up X-Forwarded-Proto {$PUBLIC_SCHEME}
+		}
+
+		@api path /api /api/* /ws /ws/*
+		reverse_proxy @api {$API_UPSTREAM:127.0.0.1:3000} {
+			header_up X-Forwarded-Proto {$PUBLIC_SCHEME}
+		}
+
+		@accounts path /ui /ui/*
+		handle @accounts {
+			root * {$ACCOUNTS_ROOT:/srv/accounts}
+			try_files {path} /ui/index.html
+			file_server
+		}
+
+		header /selfhost.js Cache-Control "no-store"
+		handle {
+			root * {$STAGE_ROOT:/srv/stage}
+			try_files {path} /index.html
+			file_server
+		}
+	}
+}

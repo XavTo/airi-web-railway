@@ -1,0 +1,91 @@
+name: airi-selfhost
+services:
+  airi:
+    build: .
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      PUBLIC_URL: http://localhost:8080
+      OWNER_EMAIL: ${OWNER_EMAIL:-owner@example.net}
+      OWNER_PASSWORD: ${OWNER_PASSWORD:?generate OWNER_PASSWORD in .env}
+      APP_SECRET: ${APP_SECRET:?generate APP_SECRET in .env}
+      DATABASE_URL: postgres://airi:${POSTGRES_PASSWORD:?generate POSTGRES_PASSWORD in .env}@postgres:5432/airi
+      REDIS_URL: redis://:${REDIS_PASSWORD:?generate REDIS_PASSWORD in .env}@redis:6379/0?family=0
+      AWS_ACCESS_KEY_ID: airi-app
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET:?generate S3_SECRET in .env}
+      S3_UPSTREAM: storage:9000
+      OLLAMA_UPSTREAM: ollama:11434
+      VOICE_UPSTREAM: voice:8000
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:1.5b}
+      TTS_MODEL: ${TTS_MODEL:-hexgrad/Kokoro-82M}
+      STT_MODEL: ${STT_MODEL:-Systran/faster-whisper-base}
+      TTS_VOICE: ${TTS_VOICE:-ff_siwis}
+    depends_on: [postgres, redis, storage, ollama, voice]
+    restart: unless-stopped
+
+  postgres:
+    image: ghcr.io/tensorchord/vchord-postgres:pg18-v1.0.0
+    environment:
+      POSTGRES_USER: airi
+      POSTGRES_DB: airi
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      PGDATA: /var/lib/postgresql/18/docker
+    volumes:
+      - postgres:/var/lib/postgresql
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4.9-alpine
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
+    volumes:
+      - redis:/data
+    restart: unless-stopped
+
+  storage:
+    image: rustfs/rustfs:1.0.5
+    environment:
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_VOLUMES: /data/airi
+      RUSTFS_CONSOLE_ENABLE: "false"
+      RUSTFS_ACCESS_KEY: airi-app
+      RUSTFS_SECRET_KEY: ${S3_SECRET}
+    volumes:
+      - storage:/data
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:0.13.5
+    entrypoint: ["/bin/bash", "/opt/ollama.sh"]
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+      OLLAMA_NO_CLOUD: "1"
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:1.5b}
+      OLLAMA_CONTEXT_LENGTH: "4096"
+      OLLAMA_KEEP_ALIVE: 2m
+      OLLAMA_NUM_PARALLEL: "1"
+    volumes:
+      - ollama:/root/.ollama
+      - ./deploy/ollama.sh:/opt/ollama.sh:ro
+    restart: unless-stopped
+
+  voice:
+    image: ghcr.io/speaches-ai/speaches:0.9.0-rc.3-cpu
+    user: "0:0"
+    environment:
+      UVICORN_HOST: 0.0.0.0
+      UVICORN_PORT: "8000"
+      HF_HUB_CACHE: /data/hub
+      ENABLE_UI: "false"
+      WHISPER__INFERENCE_DEVICE: cpu
+      WHISPER__COMPUTE_TYPE: int8
+      PRELOAD_MODELS: '["${STT_MODEL:-Systran/faster-whisper-base}","${TTS_MODEL:-hexgrad/Kokoro-82M}"]'
+    volumes:
+      - voice:/data
+    restart: unless-stopped
+
+volumes:
+  postgres:
+  redis:
+  storage:
+  ollama:
+  voice:

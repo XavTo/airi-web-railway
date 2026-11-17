@@ -1,3 +1,0 @@
-FROM ghcr.io/tensorchord/vchord-postgres:pg18-v1.0.0
-
-COPY postgres-init.sql /docker-entrypoint-initdb.d/001-vchord.sql
